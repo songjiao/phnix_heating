@@ -13,8 +13,14 @@
 - **温度设定**: 支持制冷温度(5-25℃)和制热温度(25-60℃)设定
 
 ### 监控功能
-- **温度监控**: 进水温度、出水温度、室内温度、环境温度等
-- **状态监控**: 开关机状态、运行模式等
+- **温度监控**: 进水温度、出水温度、室内温度、环境温度、盘管温度、回气温度、排气温度、防冻温度、热水温度、增焓进温度、增焓出温度
+- **压力监控**: 回气压力、排气压力
+- **流量监控**: 水流量
+- **电气参数**: AC输入电压/电流、压缩机相电流、DC母线电压、IPM温度、电表输入功率、热泵能力、COP
+- **运行参数**: 压缩机频率、风机转速、电子膨胀阀开度、压缩机运行时间、电表电量
+- **通信状态**: DTU信号强度、DTU在线标志、多机组通信状态
+- **输出状态**: 压缩机、水泵、风机、阀门等各种输出状态
+- **安全开关**: 高压开关、低压开关、水流开关、干烧开关、应急开关等
 
 ## 安装方法
 
@@ -72,9 +78,66 @@
 
 ### Sensor实体
 - **温度传感器**: 各种温度监控
+- **压力传感器**: 系统压力监控
+- **电气传感器**: 电压、电流、功率监控
+- **运行传感器**: 频率、转速、运行时间等
 
 ### Binary Sensor实体
 - **状态传感器**: 开关机状态、运行模式等
+- **输出传感器**: 各种设备输出状态
+- **安全传感器**: 安全开关状态
+
+## 自动化示例
+
+### 温度控制自动化
+```yaml
+automation:
+  - alias: "自动制热控制"
+    trigger:
+      platform: numeric_state
+      entity_id: sensor.indoor_temp
+      below: 18
+    action:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.phnix_heating
+        data:
+          hvac_mode: heat
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.phnix_heating
+        data:
+          temperature: 22
+```
+
+### 安全告警自动化
+```yaml
+automation:
+  - alias: "高压告警"
+    trigger:
+      platform: state
+      entity_id: binary_sensor.high_pressure_switch
+      to: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "地暖主机高压告警！"
+```
+
+### 节能模式自动化
+```yaml
+automation:
+  - alias: "夜间节能模式"
+    trigger:
+      platform: time
+      at: "22:00:00"
+    action:
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.phnix_heating
+        data:
+          temperature: 18
+```
 
 ## 故障排除
 
@@ -90,6 +153,12 @@ logger:
   custom_components.phnix_heating: debug
 ```
 
+### 调试步骤
+1. 检查设备是否在线
+2. 验证API令牌是否过期
+3. 确认网络连接正常
+4. 查看Home Assistant日志
+
 ## 技术支持
 
 如有问题，请：
@@ -98,12 +167,16 @@ logger:
 3. 验证API令牌有效性
 4. 在[GitHub Issues](https://github.com/songjiao/phnix_heating/issues)中报告问题
 
+## 贡献
+
+欢迎提交Issue和Pull Request来改进这个集成！
+
 ## 更新日志
 
 ### v1.0.0
 - 初始版本发布
 - 支持基本的开关机、模式、温度控制
-- 支持状态监控
+- 支持全面的状态监控
 - 支持中文界面
 - 支持HACS安装
 
