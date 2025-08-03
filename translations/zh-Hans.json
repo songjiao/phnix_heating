@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Phnix地暖主机配置",
+        "description": "请输入您的设备信息",
+        "data": {
+          "name": "设备名称",
+          "device_code": "设备编码",
+          "token": "认证令牌",
+          "protocol_id": "协议ID",
+          "scan_interval": "扫描间隔(秒)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接到设备，请检查设备编码和令牌",
+      "unknown": "发生未知错误"
+    },
+    "abort": {
+      "already_configured": "设备已经配置"
+    }
+  },
+  "entity": {
+    "climate": {
+      "phnix_heating": {
+        "name": "Phnix地暖主机"
+      }
+    }
+  }
+} 

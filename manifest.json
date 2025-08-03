@@ -1,0 +1,11 @@
+{
+  "domain": "phnix_heating",
+  "name": "Phnix Heating System",
+  "documentation": "https://github.com/your-repo/phnix_heating",
+  "dependencies": [],
+  "codeowners": ["@your-username"],
+  "requirements": ["aiohttp>=3.8.0"],
+  "version": "1.0.0",
+  "iot_class": "cloud_polling",
+  "config_flow": true
+} 
