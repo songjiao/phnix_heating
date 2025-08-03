@@ -1,31 +1,89 @@
 {
-  "config": {
-    "step": {
-      "user": {
-        "title": "Phnix地暖主机配置",
-        "description": "请输入您的设备信息",
-        "data": {
-          "name": "设备名称",
-          "device_code": "设备编码",
-          "token": "认证令牌",
-          "protocol_id": "协议ID",
-          "scan_interval": "扫描间隔(秒)"
+    "config": {
+        "step": {
+            "user": {
+                "title": "Phnix地暖主机配置",
+                "description": "请输入您的Phnix账户信息和设备编码",
+                "data": {
+                    "username": "用户名",
+                    "password": "密码",
+                    "device_code": "设备编码",
+                    "name": "设备名称"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "无法连接到设备，请检查网络连接和账户信息"
+        },
+        "abort": {
+            "already_configured": "设备已经配置"
         }
-      }
     },
-    "error": {
-      "cannot_connect": "无法连接到设备，请检查设备编码和令牌",
-      "unknown": "发生未知错误"
-    },
-    "abort": {
-      "already_configured": "设备已经配置"
+    "entity": {
+        "climate": {
+            "phnix_heating": {
+                "name": "地暖主机"
+            }
+        },
+        "sensor": {
+            "inlet_water_temp": "进水温度",
+            "outlet_water_temp": "出水温度",
+            "indoor_temp": "室内温度",
+            "ambient_temp": "环境温度",
+            "coil_temp": "盘管温度",
+            "suction_temp": "回气温度",
+            "exhaust_temp": "排气温度",
+            "frost_temp": "防冻温度",
+            "hot_water_temp": "热水温度",
+            "evi_inlet_temp": "增焓进温度",
+            "evi_outlet_temp": "增焓出温度",
+            "suction_pressure": "回气压力",
+            "exhaust_pressure": "排气压力",
+            "water_flow": "水流量",
+            "ac_voltage": "AC输入电压",
+            "ac_current": "AC输入电流",
+            "comp_current": "压缩机相电流",
+            "dc_bus_voltage": "DC母线电压",
+            "ipm_temp": "IPM温度",
+            "power_input": "电表输入功率",
+            "heat_pump_capacity": "热泵能力",
+            "cop": "COP",
+            "comp_freq": "压缩机频率",
+            "fan1_speed": "风机1转速",
+            "fan2_speed": "风机2转速",
+            "eev_opening": "电子膨胀阀开度",
+            "evi_eev_opening": "增焓电子膨胀阀开度",
+            "comp_runtime": "压缩机运行时间",
+            "electricity": "电表电量",
+            "dtu_signal": "DTU信号强度",
+            "dtu_online": "DTU在线标志",
+            "multi_unit_comm": "多机组通信状态"
+        },
+        "binary_sensor": {
+            "power": "电源状态",
+            "mode": "工作模式",
+            "function": "运行功能",
+            "comp_output": "压缩机输出",
+            "secondary_pump_output": "二次泵输出",
+            "high_fan_output": "高风输出",
+            "low_fan_output": "低风输出",
+            "four_way_valve_output": "四通阀输出",
+            "hot_water_valve_output": "热水三通阀输出",
+            "water_pump_output": "水泵输出",
+            "electric_heat_output": "电加热输出",
+            "spray_valve_output": "喷淋阀输出",
+            "frost_heat_output": "防冻加热带输出",
+            "crankcase_heat_output": "系统1曲轴加热带输出",
+            "water_supply_output": "补水阀输出",
+            "alarm_output": "报警输出",
+            "cool_water_valve_output": "制冷水阀输出",
+            "heat_water_valve_output": "制热水阀输出",
+            "high_pressure_switch": "高压开关",
+            "low_pressure_switch": "低压开关",
+            "water_flow_switch": "水流开关",
+            "dry_burn_switch": "电加热干烧开",
+            "mode_input_switch": "模式输入",
+            "emergency_switch": "应急开关"
+        }
     }
-  },
-  "entity": {
-    "climate": {
-      "phnix_heating": {
-        "name": "Phnix地暖主机"
-      }
-    }
-  }
 } 

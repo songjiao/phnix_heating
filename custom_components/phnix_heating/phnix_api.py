@@ -1,10 +1,14 @@
-"""API client for Phnix Heating System."""
+"""API client for Phnix Heating system."""
 import logging
+import hashlib
 import aiohttp
 from typing import Any, Dict, List, Optional
+
 from .const import (
-    API_BASE_URL, API_CONTROL_ENDPOINT, API_STATUS_ENDPOINT, API_CONFIG_ENDPOINT,
-    DEFAULT_HEADERS, DEFAULT_PROTOCOL_ID
+    LOGIN_URL, CONTROL_URL, STATUS_URL, CONFIG_URL,
+    DEFAULT_HEADERS, LOGIN_DATA, POWER_ADDRESS, MODE_ADDRESS,
+    COOL_TEMP_ADDRESS, HEAT_TEMP_ADDRESS, POWER_OFF, POWER_ON,
+    MODE_COOL, MODE_HEAT
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -14,14 +18,16 @@ class PhnixAPIError(Exception):
     pass
 
 class PhnixAPI:
-    """API client for Phnix Heating System."""
+    """Phnix Heating API client."""
     
-    def __init__(self, token: str, device_code: str, protocol_id: str = DEFAULT_PROTOCOL_ID):
+    def __init__(self, username: str, password: str, device_code: str):
         """Initialize the API client."""
-        self.token = token
+        self.username = username
+        self.password = password
         self.device_code = device_code
-        self.protocol_id = protocol_id
+        self.token: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
+        self._protocol_id: Optional[str] = None
         
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
@@ -29,80 +35,161 @@ class PhnixAPI:
             self.session = aiohttp.ClientSession()
         return self.session
     
-    async def _make_request(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Make API request."""
-        session = await self._get_session()
-        headers = {**DEFAULT_HEADERS, "x-token": self.token}
-        
+    def _hash_password(self, password: str) -> str:
+        """Hash password using MD5."""
+        return hashlib.md5(password.encode()).hexdigest()
+    
+    async def login(self) -> None:
+        """Login and get token."""
         try:
+            session = await self._get_session()
+            
+            # 准备登录数据
+            login_data = {
+                **LOGIN_DATA,
+                "userName": self.username,
+                "password": self._hash_password(self.password)
+            }
+            
+            _LOGGER.debug("正在登录...")
+            
             async with session.post(
-                f"{API_BASE_URL}{endpoint}",
-                headers=headers,
-                json=data,
-                timeout=aiohttp.ClientTimeout(total=30)
+                LOGIN_URL,
+                headers=DEFAULT_HEADERS,
+                json=login_data
             ) as response:
                 if response.status != 200:
-                    raise PhnixAPIError(f"HTTP {response.status}: {response.reason}")
+                    raise PhnixAPIError(f"登录失败，HTTP状态码: {response.status}")
                 
-                result = await response.json()
+                data = await response.json()
                 
-                if not result.get("isReusltSuc", False):
-                    error_msg = result.get("error_msg", "Unknown error")
-                    error_code = result.get("error_code", "Unknown")
-                    raise PhnixAPIError(f"API Error {error_code}: {error_msg}")
+                if not data.get("isReusltSuc"):
+                    error_msg = data.get("error_msg", "未知错误")
+                    raise PhnixAPIError(f"登录失败: {error_msg}")
                 
-                return result
+                # 获取token
+                object_result = data.get("objectResult", {})
+                self.token = object_result.get("x-token")
+                
+                if not self.token:
+                    raise PhnixAPIError("登录成功但未获取到token")
+                
+                _LOGGER.debug("登录成功，获取到token")
                 
         except aiohttp.ClientError as e:
-            raise PhnixAPIError(f"Network error: {e}")
+            raise PhnixAPIError(f"网络连接错误: {e}")
         except Exception as e:
-            raise PhnixAPIError(f"Unexpected error: {e}")
+            raise PhnixAPIError(f"登录过程中发生错误: {e}")
     
-    async def set_power(self, power: bool) -> bool:
+    async def _ensure_token(self) -> None:
+        """Ensure we have a valid token."""
+        if not self.token:
+            await self.login()
+    
+    async def _make_request(
+        self, 
+        url: str, 
+        data: Dict[str, Any], 
+        retry_on_auth_error: bool = True
+    ) -> Dict[str, Any]:
+        """Make API request with token handling."""
+        try:
+            await self._ensure_token()
+            
+            session = await self._get_session()
+            headers = {**DEFAULT_HEADERS, "x-token": self.token}
+            
+            async with session.post(url, headers=headers, json=data) as response:
+                if response.status == 401 and retry_on_auth_error:
+                    _LOGGER.warning("Token可能已过期，尝试重新登录")
+                    self.token = None
+                    await self.login()
+                    headers = {**DEFAULT_HEADERS, "x-token": self.token}
+                    
+                    async with session.post(url, headers=headers, json=data) as retry_response:
+                        if retry_response.status != 200:
+                            raise PhnixAPIError(f"API请求失败，HTTP状态码: {retry_response.status}")
+                        return await retry_response.json()
+                
+                if response.status != 200:
+                    raise PhnixAPIError(f"API请求失败，HTTP状态码: {response.status}")
+                
+                return await response.json()
+                
+        except aiohttp.ClientError as e:
+            raise PhnixAPIError(f"网络连接错误: {e}")
+        except Exception as e:
+            raise PhnixAPIError(f"API请求过程中发生错误: {e}")
+    
+    async def _get_protocol_id(self) -> str:
+        """Get protocol ID for the device."""
+        if self._protocol_id:
+            return self._protocol_id
+            
+        # 使用默认协议ID
+        self._protocol_id = "1679324789907087360"
+        return self._protocol_id
+    
+    async def set_power(self, power: bool) -> None:
         """Set device power state."""
-        value = "1" if power else "0"
+        protocol_id = await self._get_protocol_id()
+        value = POWER_ON if power else POWER_OFF
+        
         data = {
             "deviceCode": self.device_code,
-            "protocalId": self.protocol_id,
-            "address": "1011",
+            "protocalId": protocol_id,
+            "address": POWER_ADDRESS,
             "value": value
         }
         
-        result = await self._make_request(API_CONTROL_ENDPOINT, data)
-        _LOGGER.debug("Set power result: %s", result)
-        return True
+        result = await self._make_request(CONTROL_URL, data)
+        
+        if not result.get("isReusltSuc"):
+            error_msg = result.get("error_msg", "未知错误")
+            raise PhnixAPIError(f"设置电源状态失败: {error_msg}")
     
-    async def set_mode(self, mode: str) -> bool:
-        """Set device mode (0=制冷, 1=制热)."""
+    async def set_mode(self, mode: str) -> None:
+        """Set device mode (cool/heat)."""
+        protocol_id = await self._get_protocol_id()
+        value = MODE_COOL if mode == "cool" else MODE_HEAT
+        
         data = {
             "deviceCode": self.device_code,
-            "protocalId": self.protocol_id,
-            "address": "1012",
-            "value": mode
+            "protocalId": protocol_id,
+            "address": MODE_ADDRESS,
+            "value": value
         }
         
-        result = await self._make_request(API_CONTROL_ENDPOINT, data)
-        _LOGGER.debug("Set mode result: %s", result)
-        return True
+        result = await self._make_request(CONTROL_URL, data)
+        
+        if not result.get("isReusltSuc"):
+            error_msg = result.get("error_msg", "未知错误")
+            raise PhnixAPIError(f"设置工作模式失败: {error_msg}")
     
-    async def set_temperature(self, temp: float, is_cooling: bool) -> bool:
-        """Set temperature for cooling or heating mode."""
-        address = "1158" if is_cooling else "1159"
+    async def set_temperature(self, temperature: float, mode: str) -> None:
+        """Set target temperature."""
+        protocol_id = await self._get_protocol_id()
+        address = COOL_TEMP_ADDRESS if mode == "cool" else HEAT_TEMP_ADDRESS
+        
         data = {
             "deviceCode": self.device_code,
-            "protocalId": self.protocol_id,
+            "protocalId": protocol_id,
             "address": address,
-            "value": str(int(temp))
+            "value": str(int(temperature))
         }
         
-        result = await self._make_request(API_CONTROL_ENDPOINT, data)
-        _LOGGER.debug("Set temperature result: %s", result)
-        return True
+        result = await self._make_request(CONTROL_URL, data)
+        
+        if not result.get("isReusltSuc"):
+            error_msg = result.get("error_msg", "未知错误")
+            raise PhnixAPIError(f"设置温度失败: {error_msg}")
     
-    async def get_device_status(self) -> Dict[str, Any]:
+    async def get_device_status(self) -> List[Dict[str, Any]]:
         """Get complete device status."""
+        protocol_id = await self._get_protocol_id()
+        
         data = {
-            "protocalId": self.protocol_id,
+            "protocalId": protocol_id,
             "pageIndex": 1,
             "pageSize": 9999,
             "deviceCode": self.device_code,
@@ -110,11 +197,21 @@ class PhnixAPI:
             "num": ""
         }
         
-        result = await self._make_request(API_STATUS_ENDPOINT, data)
-        return result.get("objectResult", {}).get("dataList", [])
+        result = await self._make_request(STATUS_URL, data)
+        
+        if not result.get("isReusltSuc"):
+            error_msg = result.get("error_msg", "未知错误")
+            raise PhnixAPIError(f"获取设备状态失败: {error_msg}")
+        
+        object_result = result.get("objectResult", {})
+        data_list = object_result.get("dataList", [])
+        
+        return data_list
     
-    async def get_control_config(self, address: str) -> Dict[str, Any]:
-        """Get control configuration for specific address."""
+    async def get_device_config(self, address: str) -> List[Dict[str, Any]]:
+        """Get device configuration for specific address."""
+        protocol_id = await self._get_protocol_id()
+        
         data = {
             "deviceCode": self.device_code,
             "pageIndex": 1,
@@ -122,10 +219,18 @@ class PhnixAPI:
             "address": address
         }
         
-        result = await self._make_request(API_CONFIG_ENDPOINT, data)
-        return result.get("objectResult", {}).get("dataList", [])
+        result = await self._make_request(CONFIG_URL, data)
+        
+        if not result.get("isReusltSuc"):
+            error_msg = result.get("error_msg", "未知错误")
+            raise PhnixAPIError(f"获取设备配置失败: {error_msg}")
+        
+        object_result = result.get("objectResult", {})
+        data_list = object_result.get("dataList", [])
+        
+        return data_list
     
-    async def close(self):
-        """Close the API session."""
+    async def close(self) -> None:
+        """Close the API client."""
         if self.session and not self.session.closed:
             await self.session.close() 

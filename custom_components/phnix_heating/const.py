@@ -1,25 +1,17 @@
 """Constants for the Phnix Heating integration."""
-from typing import Final
+from homeassistant.const import Platform
 
-DOMAIN: Final = "phnix_heating"
+DOMAIN = "phnix_heating"
+PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR]
 
-# 配置项
-CONF_DEVICE_CODE = "device_code"
-CONF_PROTOCOL_ID = "protocol_id"
-CONF_TOKEN = "token"
-CONF_SCAN_INTERVAL = "scan_interval"
+# API配置
+BASE_URL = "https://server.phnixsmart.com"
+LOGIN_URL = f"{BASE_URL}/crmservice/api/app/user/login"
+CONTROL_URL = f"{BASE_URL}/crmservice/api/app/device/createDeviceControlConfigData"
+STATUS_URL = f"{BASE_URL}/crmservice/api/app/device/getControlDetailStatusByDeviceCode"
+CONFIG_URL = f"{BASE_URL}/crmservice/api/app/device/getControlParamConfigByDeviceCode"
 
-# 默认值
-DEFAULT_SCAN_INTERVAL = 30
-DEFAULT_PROTOCOL_ID = "1679324789907087360"
-
-# API相关
-API_BASE_URL = "https://server.phnixsmart.com"
-API_CONTROL_ENDPOINT = "/crmservice/api/app/device/createDeviceControlConfigData"
-API_STATUS_ENDPOINT = "/crmservice/api/app/device/getControlDetailStatusByDeviceCode"
-API_CONFIG_ENDPOINT = "/crmservice/api/app/device/getControlParamConfigByDeviceCode"
-
-# 请求头
+# 默认请求头
 DEFAULT_HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "zh-CN,zh;q=0.9",
@@ -35,102 +27,110 @@ DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
     "sec-ch-ua": '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
     "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"'
+    "sec-ch-ua-platform": '"Windows"',
+}
+
+# 登录请求参数
+LOGIN_DATA = {
+    "loginSource": "Web",
+    "type": "1"
 }
 
 # 控制地址
-ADDRESS_POWER = "1011"  # 开关机控制
-ADDRESS_MODE = "1012"   # 工作模式
-ADDRESS_COOL_TEMP = "1158"  # 制冷温度设定
-ADDRESS_HEAT_TEMP = "1159"  # 制热温度设定
+POWER_ADDRESS = "1011"
+MODE_ADDRESS = "1012"
+COOL_TEMP_ADDRESS = "1158"
+HEAT_TEMP_ADDRESS = "1159"
 
-# 状态地址
-ADDRESS_POWER_STATUS = "2011"  # 开关机状态
-ADDRESS_MODE_STATUS = "2012"   # 运行模式
-ADDRESS_FUNCTION = "2013"      # 运行功能
+# 控制值
+POWER_OFF = "0"
+POWER_ON = "1"
+MODE_COOL = "0"
+MODE_HEAT = "1"
 
-# 温度传感器地址
-ADDRESS_INLET_WATER_TEMP = "2045"   # 进水温度
-ADDRESS_OUTLET_WATER_TEMP = "2046"  # 出水温度
-ADDRESS_INDOOR_TEMP = "2047"        # 室内温度
-ADDRESS_AMBIENT_TEMP = "2048"       # 环境温度
-ADDRESS_COIL_TEMP = "2049"          # 盘管温度
-ADDRESS_SUCTION_TEMP = "2051"       # 回气温度
-ADDRESS_EXHAUST_TEMP = "2053"       # 排气温度
-ADDRESS_FROST_TEMP = "2055"         # 防冻温度
-ADDRESS_HOT_WATER_TEMP = "2056"     # 热水温度
-ADDRESS_EVI_INLET_TEMP = "2063"     # 增焓进温度
-ADDRESS_EVI_OUTLET_TEMP = "2064"    # 增焓出温度
+# 状态地址 - 温度传感器
+TEMP_SENSORS = {
+    "inlet_water_temp": "2045",
+    "outlet_water_temp": "2046", 
+    "indoor_temp": "2047",
+    "ambient_temp": "2048",
+    "coil_temp": "2049",
+    "suction_temp": "2051",
+    "exhaust_temp": "2053",
+    "frost_temp": "2055",
+    "hot_water_temp": "2056",
+    "evi_inlet_temp": "2063",
+    "evi_outlet_temp": "2064",
+}
 
-# 压力和流量地址
-ADDRESS_SUCTION_PRESSURE = "2070"   # 回气压力
-ADDRESS_EXHAUST_PRESSURE = "2071"   # 排气压力
-ADDRESS_WATER_FLOW = "2057"         # 水流量
+# 状态地址 - 压力传感器
+PRESSURE_SENSORS = {
+    "suction_pressure": "2070",
+    "exhaust_pressure": "2071",
+}
 
-# 电气参数地址
-ADDRESS_AC_VOLTAGE = "2038"         # AC输入电压
-ADDRESS_AC_CURRENT = "2039"         # AC输入电流
-ADDRESS_COMP_CURRENT = "2040"       # 压缩机相电流
-ADDRESS_DC_BUS_VOLTAGE = "2041"     # DC母线电压
-ADDRESS_IPM_TEMP = "2042"           # IPM温度
-ADDRESS_POWER_INPUT = "2031"        # 电表输入功率
-ADDRESS_HEAT_PUMP_CAPACITY = "2032" # 热泵能力
-ADDRESS_COP = "2033"                # COP
+# 状态地址 - 流量传感器
+FLOW_SENSORS = {
+    "water_flow": "2057",
+}
 
-# 运行参数地址
-ADDRESS_COMP_FREQ = "2025"          # 压缩机频率
-ADDRESS_FAN1_SPEED = "2029"         # 风机1转速
-ADDRESS_FAN2_SPEED = "2030"         # 风机2转速
-ADDRESS_EEV_OPENING = "2020"        # 电子膨胀阀开度
-ADDRESS_EVI_EEV_OPENING = "2021"    # 增焓电子膨胀阀开度
-ADDRESS_COMP_RUNTIME = "2043"       # 压缩机运行时间
-ADDRESS_ELECTRICITY = "2035"        # 电表电量
+# 状态地址 - 电气参数传感器
+ELECTRICAL_SENSORS = {
+    "ac_voltage": "2038",
+    "ac_current": "2039",
+    "comp_current": "2040",
+    "dc_bus_voltage": "2041",
+    "ipm_temp": "2042",
+    "power_input": "2031",
+    "heat_pump_capacity": "2032",
+    "cop": "2033",
+}
 
-# 通信状态地址
-ADDRESS_DTU_SIGNAL = "2037"         # DTU信号强度
-ADDRESS_DTU_ONLINE = "2130"         # DTU在线标志
-ADDRESS_MULTI_UNIT_COMM = "2059"    # 回水多机组并联通信状态
+# 状态地址 - 运行参数传感器
+RUNNING_SENSORS = {
+    "comp_freq": "2025",
+    "fan1_speed": "2029",
+    "fan2_speed": "2030",
+    "eev_opening": "2020",
+    "evi_eev_opening": "2021",
+    "comp_runtime": "2043",
+    "electricity": "2035",
+}
 
-# 输出状态地址 (address: 2019)
-OUTPUT_COMPRESSOR = "O01"           # 压缩机输出
-OUTPUT_SECONDARY_PUMP = "O02"       # 二次泵输出
-OUTPUT_HIGH_FAN = "O03"             # 高风输出
-OUTPUT_LOW_FAN = "O04"              # 低风输出
-OUTPUT_FOUR_WAY_VALVE = "O05"       # 四通阀输出
-OUTPUT_HOT_WATER_VALVE = "O06"      # 热水三通阀输出
-OUTPUT_WATER_PUMP = "O07"           # 水泵输出
-OUTPUT_ELECTRIC_HEAT = "O08"        # 电加热输出
-OUTPUT_SPRAY_VALVE = "O09"          # 喷淋阀输出
-OUTPUT_FROST_HEAT = "O10"           # 防冻加热带输出
-OUTPUT_CRANKCASE_HEAT = "O11"       # 系统1曲轴加热带输出
-OUTPUT_WATER_SUPPLY = "bit11"       # 补水阀输出
-OUTPUT_ALARM = "O13"                # 报警输出
-OUTPUT_COOL_WATER_VALVE = "bit13"   # 制冷水阀输出
-OUTPUT_HEAT_WATER_VALVE = "bit14"   # 制热水阀输出
+# 状态地址 - 通信状态传感器
+COMMUNICATION_SENSORS = {
+    "dtu_signal": "2037",
+    "dtu_online": "2130",
+    "multi_unit_comm": "2059",
+}
 
-# 安全开关地址 (address: 2034)
-SWITCH_HIGH_PRESSURE = "S01"        # 高压开关
-SWITCH_LOW_PRESSURE = "S03"         # 低压开关
-SWITCH_WATER_FLOW = "S04"           # 水流开关
-SWITCH_DRY_BURN = "S05"             # 电加热干烧开关
-SWITCH_MODE_INPUT = "S06"           # 模式输入
-SWITCH_EMERGENCY = "S09"            # 应急开关
+# 状态地址 - 输出状态
+OUTPUT_ADDRESS = "2019"
+OUTPUT_NAMES = {
+    "O01": "压缩机输出",
+    "O02": "二次泵输出", 
+    "O03": "高风输出",
+    "O04": "低风输出",
+    "O05": "四通阀输出",
+    "O06": "热水三通阀输出",
+    "O07": "水泵输出",
+    "O08": "电加热输出",
+    "O09": "喷淋阀输出",
+    "O10": "防冻加热带输出",
+    "O11": "系统1曲轴加热带输出",
+    "bit11": "补水阀输出",
+    "O13": "报警输出",
+    "bit13": "制冷水阀输出",
+    "bit14": "制热水阀输出",
+}
 
-# 模式值
-MODE_COOL = "0"  # 制冷
-MODE_HEAT = "1"  # 制热
-
-# 开关值
-POWER_OFF = "0"  # 关机
-POWER_ON = "1"   # 开机
-
-# 温度范围
-COOL_TEMP_MIN = 5
-COOL_TEMP_MAX = 25
-HEAT_TEMP_MIN = 25
-HEAT_TEMP_MAX = 60
-
-# 实体类型
-ENTITY_TYPE_CLIMATE = "climate"
-ENTITY_TYPE_SENSOR = "sensor"
-ENTITY_TYPE_BINARY_SENSOR = "binary_sensor" 
+# 状态地址 - 安全开关
+SAFETY_ADDRESS = "2034"
+SAFETY_NAMES = {
+    "S01": "高压开关",
+    "S03": "低压开关",
+    "S04": "水流开关",
+    "S05": "电加热干烧开",
+    "S06": "模式输入",
+    "S09": "应急开关",
+} 

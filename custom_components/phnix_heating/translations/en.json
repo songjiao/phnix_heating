@@ -1,31 +1,89 @@
 {
-  "config": {
-    "step": {
-      "user": {
-        "title": "Phnix Heating System Configuration",
-        "description": "Please enter your device information",
-        "data": {
-          "name": "Device Name",
-          "device_code": "Device Code",
-          "token": "Authentication Token",
-          "protocol_id": "Protocol ID",
-          "scan_interval": "Scan Interval (seconds)"
+    "config": {
+        "step": {
+            "user": {
+                "title": "Phnix Heating System Configuration",
+                "description": "Please enter your Phnix account information and device code",
+                "data": {
+                    "username": "Username",
+                    "password": "Password",
+                    "device_code": "Device Code",
+                    "name": "Device Name"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Cannot connect to device, please check network connection and account information"
+        },
+        "abort": {
+            "already_configured": "Device is already configured"
         }
-      }
     },
-    "error": {
-      "cannot_connect": "Failed to connect to device, please check device code and token",
-      "unknown": "An unexpected error occurred"
-    },
-    "abort": {
-      "already_configured": "Device is already configured"
+    "entity": {
+        "climate": {
+            "phnix_heating": {
+                "name": "Heating System"
+            }
+        },
+        "sensor": {
+            "inlet_water_temp": "Inlet Water Temperature",
+            "outlet_water_temp": "Outlet Water Temperature",
+            "indoor_temp": "Indoor Temperature",
+            "ambient_temp": "Ambient Temperature",
+            "coil_temp": "Coil Temperature",
+            "suction_temp": "Suction Temperature",
+            "exhaust_temp": "Exhaust Temperature",
+            "frost_temp": "Frost Temperature",
+            "hot_water_temp": "Hot Water Temperature",
+            "evi_inlet_temp": "EVI Inlet Temperature",
+            "evi_outlet_temp": "EVI Outlet Temperature",
+            "suction_pressure": "Suction Pressure",
+            "exhaust_pressure": "Exhaust Pressure",
+            "water_flow": "Water Flow",
+            "ac_voltage": "AC Input Voltage",
+            "ac_current": "AC Input Current",
+            "comp_current": "Compressor Current",
+            "dc_bus_voltage": "DC Bus Voltage",
+            "ipm_temp": "IPM Temperature",
+            "power_input": "Power Input",
+            "heat_pump_capacity": "Heat Pump Capacity",
+            "cop": "COP",
+            "comp_freq": "Compressor Frequency",
+            "fan1_speed": "Fan 1 Speed",
+            "fan2_speed": "Fan 2 Speed",
+            "eev_opening": "EEV Opening",
+            "evi_eev_opening": "EVI EEV Opening",
+            "comp_runtime": "Compressor Runtime",
+            "electricity": "Electricity Consumption",
+            "dtu_signal": "DTU Signal",
+            "dtu_online": "DTU Online",
+            "multi_unit_comm": "Multi-unit Communication"
+        },
+        "binary_sensor": {
+            "power": "Power Status",
+            "mode": "Operation Mode",
+            "function": "Operation Function",
+            "comp_output": "Compressor Output",
+            "secondary_pump_output": "Secondary Pump Output",
+            "high_fan_output": "High Fan Output",
+            "low_fan_output": "Low Fan Output",
+            "four_way_valve_output": "Four-way Valve Output",
+            "hot_water_valve_output": "Hot Water Valve Output",
+            "water_pump_output": "Water Pump Output",
+            "electric_heat_output": "Electric Heat Output",
+            "spray_valve_output": "Spray Valve Output",
+            "frost_heat_output": "Frost Heat Output",
+            "crankcase_heat_output": "Crankcase Heat Output",
+            "water_supply_output": "Water Supply Output",
+            "alarm_output": "Alarm Output",
+            "cool_water_valve_output": "Cool Water Valve Output",
+            "heat_water_valve_output": "Heat Water Valve Output",
+            "high_pressure_switch": "High Pressure Switch",
+            "low_pressure_switch": "Low Pressure Switch",
+            "water_flow_switch": "Water Flow Switch",
+            "dry_burn_switch": "Dry Burn Switch",
+            "mode_input_switch": "Mode Input Switch",
+            "emergency_switch": "Emergency Switch"
+        }
     }
-  },
-  "entity": {
-    "climate": {
-      "phnix_heating": {
-        "name": "Phnix Heating System"
-      }
-    }
-  }
 } 
