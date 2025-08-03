@@ -77,7 +77,6 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-<<<<<<< HEAD
 # IPython
 profile_default/
 ipython_config.py
@@ -98,13 +97,6 @@ __pypackages__/
 # Celery stuff
 celerybeat-schedule
 celerybeat.pid
-=======
-# pyenv
-.python-version
-
-# celery beat schedule file
-celerybeat-schedule
->>>>>>> 4345ee5c3abf01bba5f0f5b3565467600b22eb9a
 
 # SageMath parsed files
 *.sage.py
@@ -133,32 +125,24 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-<<<<<<< HEAD
 # Pyre type checker
 .pyre/
 
+# Home Assistant
+.storage/
+.homeassistant/
+
 # IDE
-=======
-# IDE files
->>>>>>> 4345ee5c3abf01bba5f0f5b3565467600b22eb9a
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-<<<<<<< HEAD
 # OS
-=======
-# OS generated files
->>>>>>> 4345ee5c3abf01bba5f0f5b3565467600b22eb9a
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# Home Assistant specific
-.config/ 
+# 敏感信息文件 - 包含用户名、密码、token等
+地暖主机相关接口.md
+*.md.bak 
