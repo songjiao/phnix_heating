@@ -2,6 +2,9 @@
 
 这是一个用于Home Assistant的Phnix地暖主机集成插件，支持控制地暖主机的开关机、模式切换、温度设定，以及监控各种运行参数。
 
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![maintainer](https://img.shields.io/badge/maintainer-%40songjiao-blue.svg)](https://github.com/songjiao)
+
 ## 功能特性
 
 ### 控制功能
@@ -22,12 +25,17 @@
 ## 安装方法
 
 ### 方法1: HACS安装（推荐）
-1. 确保已安装HACS
-2. 在HACS中添加自定义仓库
-3. 搜索"Phnix Heating"并安装
+
+1. 确保已安装[HACS](https://hacs.xyz/)
+2. 在HACS中添加自定义仓库：
+   - 仓库: `songjiao/phnix_heating`
+   - 类别: `Integration`
+3. 搜索"Phnix Heating System"并安装
 4. 重启Home Assistant
+5. 在配置 -> 设备与服务中添加集成
 
 ### 方法2: 手动安装
+
 1. 下载插件文件到`config/custom_components/phnix_heating/`目录
 2. 重启Home Assistant
 3. 在配置 -> 设备与服务中添加集成
@@ -42,6 +50,13 @@
 ### 可选参数
 - **协议ID**: 默认为1679324789907087360，通常不需要修改
 - **扫描间隔**: 状态更新频率，默认30秒
+
+### 获取认证令牌
+
+1. 登录[Phnix云平台](http://yun.phnixsmart.com/)
+2. 打开浏览器开发者工具（F12）
+3. 在Network标签页中找到API请求
+4. 复制请求头中的`x-token`值
 
 ## 使用方法
 
@@ -109,6 +124,21 @@ automation:
           message: "地暖主机高压告警！"
 ```
 
+### 节能模式自动化
+```yaml
+automation:
+  - alias: "夜间节能模式"
+    trigger:
+      platform: time
+      at: "22:00:00"
+    action:
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.phnix_heating
+        data:
+          temperature: 18
+```
+
 ## 故障排除
 
 ### 常见问题
@@ -123,13 +153,23 @@ logger:
   custom_components.phnix_heating: debug
 ```
 
+### 调试步骤
+1. 检查设备是否在线
+2. 验证API令牌是否过期
+3. 确认网络连接正常
+4. 查看Home Assistant日志
+
 ## 技术支持
 
 如有问题，请：
 1. 查看Home Assistant日志
 2. 检查设备网络连接
 3. 验证API令牌有效性
-4. 联系技术支持
+4. 在[GitHub Issues](https://github.com/songjiao/phnix_heating/issues)中报告问题
+
+## 贡献
+
+欢迎提交Issue和Pull Request来改进这个集成！
 
 ## 更新日志
 
@@ -138,7 +178,12 @@ logger:
 - 支持基本的开关机、模式、温度控制
 - 支持全面的状态监控
 - 支持中文界面
+- 支持HACS安装
 
 ## 许可证
 
-MIT License 
+MIT License
+
+## 致谢
+
+感谢Phnix提供的API接口，让这个集成成为可能。 

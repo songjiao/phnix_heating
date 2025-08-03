@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Phnix Heating System Configuration",
+        "description": "Please enter your device information",
+        "data": {
+          "name": "Device Name",
+          "device_code": "Device Code",
+          "token": "Authentication Token",
+          "protocol_id": "Protocol ID",
+          "scan_interval": "Scan Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to device, please check device code and token",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "entity": {
+    "climate": {
+      "phnix_heating": {
+        "name": "Phnix Heating System"
+      }
+    }
+  }
+} 
