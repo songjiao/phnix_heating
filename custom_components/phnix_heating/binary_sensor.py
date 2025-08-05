@@ -252,5 +252,10 @@ class PhnixBinarySensor(BinarySensorEntity):
             self._attr_available = True
             
         except Exception as e:
-            _LOGGER.error("Failed to update binary sensor %s: %s", self._attr_name, e)
+            error_msg = str(e)
+            # 如果是登录相关错误，记录为警告而不是错误，因为会自动重试
+            if "请重新登录" in error_msg or "登录" in error_msg:
+                _LOGGER.warning("Binary sensor %s 更新时遇到登录问题，将自动重试: %s", self._attr_name, error_msg)
+            else:
+                _LOGGER.error("Failed to update binary sensor %s: %s", self._attr_name, e)
             self._attr_available = False 

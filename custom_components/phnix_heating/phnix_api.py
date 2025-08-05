@@ -114,7 +114,23 @@ class PhnixAPI:
                 if response.status != 200:
                     raise PhnixAPIError(f"API请求失败，HTTP状态码: {response.status}")
                 
-                return await response.json()
+                result = await response.json()
+                
+                # 检查是否需要重新登录（即使状态码是200）
+                if not result.get("isReusltSuc") and retry_on_auth_error:
+                    error_msg = result.get("error_msg", "")
+                    if "请重新登录" in error_msg or "token" in error_msg.lower() or "登录" in error_msg:
+                        _LOGGER.warning("服务器要求重新登录，尝试重新登录")
+                        self.token = None
+                        await self.login()
+                        headers = {**DEFAULT_HEADERS, "x-token": self.token}
+                        
+                        async with session.post(url, headers=headers, json=data) as retry_response:
+                            if retry_response.status != 200:
+                                raise PhnixAPIError(f"API请求失败，HTTP状态码: {retry_response.status}")
+                            return await retry_response.json()
+                
+                return result
                 
         except aiohttp.ClientError as e:
             raise PhnixAPIError(f"网络连接错误: {e}")
