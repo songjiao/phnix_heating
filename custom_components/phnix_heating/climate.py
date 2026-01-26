@@ -86,18 +86,22 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
 
     @property
     def current_temperature(self) -> Optional[float]:
-        """Return current temperature."""
+        """Return current temperature (inlet water temp for floor heating)."""
         if not self.coordinator.data:
             return None
 
         by_address = self.coordinator.data.get("by_address", {})
-        item = by_address.get("2047")
+        # Use inlet water temperature (2045) instead of indoor temp (2047)
+        # Floor heating systems should display water temperature
+        item = by_address.get("2045")
 
         if not item:
+            _LOGGER.debug("Inlet water temp (2045) not found in data")
             return None
 
         try:
             value = item.get("dataValue")
+            _LOGGER.debug("Inlet water temp raw value: %s", value)
             return float(value) if value else None
         except (ValueError, TypeError):
             return None
@@ -112,41 +116,52 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
         mode_item = by_address.get("2012")
         mode_status = mode_item.get("dataValue") if mode_item else None
 
-        # Select address based on mode
+        # Use status addresses (2xxx) for reading, not control addresses (1xxx)
+        # 2158 = cooling target temp status, 2159 = heating target temp status
         if mode_status == MODE_COOL:
-            address = "1158"
+            address = "2158"
         elif mode_status == MODE_HEAT:
-            address = "1159"
+            address = "2159"
         else:
+            _LOGGER.debug("Unknown mode status: %s, cannot determine target temp address", mode_status)
             return None
 
         item = by_address.get(address)
         if not item:
+            _LOGGER.debug("Target temp address %s not found in data", address)
             return None
 
         try:
             value = item.get("dataValue")
+            _LOGGER.debug("Target temp (address %s) raw value: %s", address, value)
             return float(value) if value else None
         except (ValueError, TypeError):
             return None
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
+        _LOGGER.debug("Setting HVAC mode to: %s", hvac_mode)
         try:
             if hvac_mode == HVACMode.OFF:
+                _LOGGER.debug("Sending power off command")
                 await self.api.set_power(False)
             else:
                 # Turn on first
+                _LOGGER.debug("Sending power on command")
                 await self.api.set_power(True)
 
                 # Set mode
                 if hvac_mode == HVACMode.COOL:
+                    _LOGGER.debug("Sending cool mode command")
                     await self.api.set_mode("cool")
                 elif hvac_mode == HVACMode.HEAT:
+                    _LOGGER.debug("Sending heat mode command")
                     await self.api.set_mode("heat")
 
             # Request coordinator refresh to update all entities
+            _LOGGER.debug("Refreshing coordinator after mode change")
             await self.coordinator.async_request_refresh()
+            _LOGGER.info("HVAC mode set to %s successfully", hvac_mode)
 
         except Exception as e:
             _LOGGER.error("Failed to set HVAC mode: %s", e)
@@ -157,17 +172,24 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
         try:
             temperature = kwargs.get(ATTR_TEMPERATURE)
             if temperature is None:
+                _LOGGER.debug("No temperature value provided")
                 return
 
             # Set temperature based on current mode
             current_mode = self.hvac_mode
+            _LOGGER.debug("Setting temperature to %s, current mode: %s", temperature, current_mode)
+
             if current_mode == HVACMode.COOL:
                 await self.api.set_temperature(temperature, "cool")
             elif current_mode == HVACMode.HEAT:
                 await self.api.set_temperature(temperature, "heat")
+            else:
+                _LOGGER.warning("Cannot set temperature when mode is OFF")
+                return
 
             # Request coordinator refresh to update all entities
             await self.coordinator.async_request_refresh()
+            _LOGGER.info("Temperature set to %s successfully", temperature)
 
         except Exception as e:
             _LOGGER.error("Failed to set temperature: %s", e)
@@ -176,8 +198,14 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
     async def async_turn_on(self) -> None:
         """Turn the entity on."""
         try:
+            _LOGGER.debug("Turning on device...")
             await self.api.set_power(True)
+            _LOGGER.debug("Power on command sent, setting default mode to HEAT")
+            # Default to heat mode when turning on (most common for floor heating)
+            await self.api.set_mode("heat")
+            _LOGGER.debug("Heat mode command sent, refreshing coordinator")
             await self.coordinator.async_request_refresh()
+            _LOGGER.info("Device turned on successfully with HEAT mode")
         except Exception as e:
             _LOGGER.error("Failed to turn on: %s", e)
             raise
@@ -185,8 +213,10 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
     async def async_turn_off(self) -> None:
         """Turn the entity off."""
         try:
+            _LOGGER.debug("Turning off device...")
             await self.api.set_power(False)
             await self.coordinator.async_request_refresh()
+            _LOGGER.info("Device turned off successfully")
         except Exception as e:
             _LOGGER.error("Failed to turn off: %s", e)
             raise 
