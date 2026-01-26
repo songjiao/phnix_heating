@@ -14,8 +14,11 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MODE_COOL, MODE_HEAT, POWER_OFF, POWER_ON
+from .const import DOMAIN, MODE_COOL, MODE_HEAT, POWER_OFF
+from .coordinator import PhnixDataUpdateCoordinator
+from .phnix_api import PhnixAPI
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,13 +28,16 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Phnix Heating climate platform."""
-    api = hass.data[DOMAIN][config_entry.entry_id]
-    
-    async_add_entities([PhnixClimate(api, config_entry)], True)
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: PhnixDataUpdateCoordinator = data["coordinator"]
+    api: PhnixAPI = data["api"]
 
-class PhnixClimate(ClimateEntity):
+    async_add_entities([PhnixClimate(coordinator, api, config_entry)])
+
+
+class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity):
     """Representation of a Phnix Heating climate entity."""
-    
+
     _attr_has_entity_name = True
     _attr_name = "地暖主机"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -43,140 +49,144 @@ class PhnixClimate(ClimateEntity):
     _attr_hvac_modes = [HVACMode.COOL, HVACMode.HEAT, HVACMode.OFF]
     _attr_min_temp = 5.0
     _attr_max_temp = 60.0
-    
-    def __init__(self, api, config_entry: ConfigEntry):
+
+    def __init__(
+        self,
+        coordinator: PhnixDataUpdateCoordinator,
+        api: PhnixAPI,
+        config_entry: ConfigEntry,
+    ):
         """Initialize the climate entity."""
+        super().__init__(coordinator)
         self.api = api
         self.config_entry = config_entry
         self._attr_unique_id = f"{config_entry.entry_id}_climate"
-        
-        # 状态属性
-        self._attr_hvac_mode = HVACMode.OFF
-        self._attr_target_temperature = None
-        self._attr_current_temperature = None
-        self._attr_available = False
-    
-    async def async_update(self) -> None:
-        """Update the climate state."""
-        try:
-            # 获取设备状态
-            status_data = await self.api.get_device_status()
-            
-            # 解析状态数据
-            self._parse_status_data(status_data)
-            
-            self._attr_available = True
-            
-        except Exception as e:
-            error_msg = str(e)
-            # 如果是登录相关错误，记录为警告而不是错误，因为会自动重试
-            if "请重新登录" in error_msg or "登录" in error_msg:
-                _LOGGER.warning("Climate 更新时遇到登录问题，将自动重试: %s", error_msg)
-            else:
-                _LOGGER.error("Failed to update climate state: %s", e)
-            self._attr_available = False
-    
-    def _parse_status_data(self, status_data: list) -> None:
-        """Parse status data to update climate attributes."""
-        power_status = None
-        mode_status = None
-        target_temp = None
-        current_temp = None
-        
-        for item in status_data:
-            address = item.get("address")
-            data_value = item.get("dataValue")
-            
-            if address == "2011":  # 开关机状态
-                power_status = data_value
-            elif address == "2012":  # 运行模式
-                mode_status = data_value
-            elif address == "2047":  # 室内温度
-                try:
-                    current_temp = float(data_value) if data_value else None
-                except (ValueError, TypeError):
-                    pass
-            elif address == "1158" and mode_status == MODE_COOL:  # 制冷温度设定
-                try:
-                    target_temp = float(data_value) if data_value else None
-                except (ValueError, TypeError):
-                    pass
-            elif address == "1159" and mode_status == MODE_HEAT:  # 制热温度设定
-                try:
-                    target_temp = float(data_value) if data_value else None
-                except (ValueError, TypeError):
-                    pass
-        
-        # 更新HVAC模式
+
+    @property
+    def hvac_mode(self) -> HVACMode:
+        """Return current HVAC mode."""
+        if not self.coordinator.data:
+            return HVACMode.OFF
+
+        by_address = self.coordinator.data.get("by_address", {})
+
+        power_item = by_address.get("2011")
+        mode_item = by_address.get("2012")
+
+        power_status = power_item.get("dataValue") if power_item else None
+        mode_status = mode_item.get("dataValue") if mode_item else None
+
         if power_status == POWER_OFF:
-            self._attr_hvac_mode = HVACMode.OFF
+            return HVACMode.OFF
         elif mode_status == MODE_COOL:
-            self._attr_hvac_mode = HVACMode.COOL
+            return HVACMode.COOL
         elif mode_status == MODE_HEAT:
-            self._attr_hvac_mode = HVACMode.HEAT
+            return HVACMode.HEAT
+        return HVACMode.OFF
+
+    @property
+    def current_temperature(self) -> Optional[float]:
+        """Return current temperature."""
+        if not self.coordinator.data:
+            return None
+
+        by_address = self.coordinator.data.get("by_address", {})
+        item = by_address.get("2047")
+
+        if not item:
+            return None
+
+        try:
+            value = item.get("dataValue")
+            return float(value) if value else None
+        except (ValueError, TypeError):
+            return None
+
+    @property
+    def target_temperature(self) -> Optional[float]:
+        """Return target temperature based on current mode."""
+        if not self.coordinator.data:
+            return None
+
+        by_address = self.coordinator.data.get("by_address", {})
+        mode_item = by_address.get("2012")
+        mode_status = mode_item.get("dataValue") if mode_item else None
+
+        # Select address based on mode
+        if mode_status == MODE_COOL:
+            address = "1158"
+        elif mode_status == MODE_HEAT:
+            address = "1159"
         else:
-            self._attr_hvac_mode = HVACMode.OFF
-        
-        # 更新温度
-        self._attr_current_temperature = current_temp
-        self._attr_target_temperature = target_temp
-    
+            return None
+
+        item = by_address.get(address)
+        if not item:
+            return None
+
+        try:
+            value = item.get("dataValue")
+            return float(value) if value else None
+        except (ValueError, TypeError):
+            return None
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
         try:
             if hvac_mode == HVACMode.OFF:
                 await self.api.set_power(False)
             else:
-                # 先开机
+                # Turn on first
                 await self.api.set_power(True)
-                
-                # 设置模式
+
+                # Set mode
                 if hvac_mode == HVACMode.COOL:
                     await self.api.set_mode("cool")
                 elif hvac_mode == HVACMode.HEAT:
                     await self.api.set_mode("heat")
-            
-            # 立即更新状态
-            await self.async_update()
-            
+
+            # Request coordinator refresh to update all entities
+            await self.coordinator.async_request_refresh()
+
         except Exception as e:
             _LOGGER.error("Failed to set HVAC mode: %s", e)
             raise
-    
+
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         try:
             temperature = kwargs.get(ATTR_TEMPERATURE)
             if temperature is None:
                 return
-            
-            # 根据当前模式设置温度
-            if self._attr_hvac_mode == HVACMode.COOL:
+
+            # Set temperature based on current mode
+            current_mode = self.hvac_mode
+            if current_mode == HVACMode.COOL:
                 await self.api.set_temperature(temperature, "cool")
-            elif self._attr_hvac_mode == HVACMode.HEAT:
+            elif current_mode == HVACMode.HEAT:
                 await self.api.set_temperature(temperature, "heat")
-            
-            # 立即更新状态
-            await self.async_update()
-            
+
+            # Request coordinator refresh to update all entities
+            await self.coordinator.async_request_refresh()
+
         except Exception as e:
             _LOGGER.error("Failed to set temperature: %s", e)
             raise
-    
+
     async def async_turn_on(self) -> None:
         """Turn the entity on."""
         try:
             await self.api.set_power(True)
-            await self.async_update()
+            await self.coordinator.async_request_refresh()
         except Exception as e:
             _LOGGER.error("Failed to turn on: %s", e)
             raise
-    
+
     async def async_turn_off(self) -> None:
         """Turn the entity off."""
         try:
             await self.api.set_power(False)
-            await self.async_update()
+            await self.coordinator.async_request_refresh()
         except Exception as e:
             _LOGGER.error("Failed to turn off: %s", e)
             raise 

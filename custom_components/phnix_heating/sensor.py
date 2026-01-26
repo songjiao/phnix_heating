@@ -1,6 +1,6 @@
 """Sensor platform for Phnix Heating integration."""
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorEntity,
@@ -17,13 +17,13 @@ from homeassistant.const import (
     UnitOfVolumeFlowRate,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
-    PERCENTAGE,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .phnix_api import PhnixAPI
+from .coordinator import PhnixDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -304,69 +304,59 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Phnix Heating sensor platform."""
-    api = hass.data[DOMAIN][config_entry.entry_id]
-    
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: PhnixDataUpdateCoordinator = data["coordinator"]
+
     entities = []
     for sensor_config in SENSORS:
-        entities.append(PhnixSensor(api, config_entry, sensor_config))
-    
-    async_add_entities(entities, True)
+        entities.append(PhnixSensor(coordinator, config_entry, sensor_config))
 
-class PhnixSensor(SensorEntity):
+    async_add_entities(entities)
+
+class PhnixSensor(CoordinatorEntity[PhnixDataUpdateCoordinator], SensorEntity):
     """Representation of a Phnix Heating sensor."""
-    
+
     _attr_has_entity_name = True
-    
-    def __init__(self, api: PhnixAPI, config_entry: ConfigEntry, sensor_config: dict):
+
+    def __init__(
+        self,
+        coordinator: PhnixDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        sensor_config: dict,
+    ):
         """Initialize the sensor."""
-        self.api = api
+        super().__init__(coordinator)
         self.config_entry = config_entry
         self.sensor_config = sensor_config
-        
-        # 设置实体属性
+        self._address = sensor_config["address"]
+
+        # Set entity attributes
         self._attr_unique_id = f"{config_entry.entry_id}_{sensor_config['key']}"
         self._attr_name = sensor_config["name"]
         self._attr_native_unit_of_measurement = sensor_config["unit"]
         self._attr_device_class = sensor_config["device_class"]
         self._attr_state_class = sensor_config["state_class"]
-        
-        # 状态属性
-        self._attr_native_value = None
-        self._attr_available = False
-    
-    async def async_update(self) -> None:
-        """Update the sensor state."""
+
+    @property
+    def native_value(self) -> Any:
+        """Return the sensor value from coordinator data."""
+        if not self.coordinator.data:
+            return None
+
+        by_address = self.coordinator.data.get("by_address", {})
+        item = by_address.get(self._address)
+
+        if not item:
+            return None
+
+        value = item.get("dataValue")
+        if value is None:
+            return None
+
         try:
-            # 获取设备状态
-            status_data = await self.api.get_device_status()
-            
-            # 查找对应的数据
-            address = self.sensor_config["address"]
-            for item in status_data:
-                if item["address"] == address:
-                    value = item.get("dataValue")
-                    if value is not None:
-                        try:
-                            # 尝试转换为数值
-                            if "." in value:
-                                self._attr_native_value = float(value)
-                            else:
-                                self._attr_native_value = int(value)
-                        except (ValueError, TypeError):
-                            self._attr_native_value = value
-                    else:
-                        self._attr_native_value = None
-                    break
-            else:
-                self._attr_native_value = None
-            
-            self._attr_available = True
-            
-        except Exception as e:
-            error_msg = str(e)
-            # 如果是登录相关错误，记录为警告而不是错误，因为会自动重试
-            if "请重新登录" in error_msg or "登录" in error_msg:
-                _LOGGER.warning("Sensor %s 更新时遇到登录问题，将自动重试: %s", self._attr_name, error_msg)
-            else:
-                _LOGGER.error("Failed to update sensor %s: %s", self._attr_name, e)
-            self._attr_available = False 
+            # Try to convert to numeric value
+            if "." in str(value):
+                return float(value)
+            return int(value)
+        except (ValueError, TypeError):
+            return value 

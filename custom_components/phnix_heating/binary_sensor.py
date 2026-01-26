@@ -1,6 +1,5 @@
 """Binary Sensor platform for Phnix Heating integration."""
 import logging
-from typing import Any, Optional
 
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
@@ -9,9 +8,10 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .phnix_api import PhnixAPI
+from .coordinator import PhnixDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -195,67 +195,56 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Phnix Heating binary sensor platform."""
-    api = hass.data[DOMAIN][config_entry.entry_id]
-    
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: PhnixDataUpdateCoordinator = data["coordinator"]
+
     entities = []
     for sensor_config in BINARY_SENSORS:
-        entities.append(PhnixBinarySensor(api, config_entry, sensor_config))
-    
-    async_add_entities(entities, True)
+        entities.append(PhnixBinarySensor(coordinator, config_entry, sensor_config))
 
-class PhnixBinarySensor(BinarySensorEntity):
+    async_add_entities(entities)
+
+
+class PhnixBinarySensor(CoordinatorEntity[PhnixDataUpdateCoordinator], BinarySensorEntity):
     """Representation of a Phnix Heating binary sensor."""
-    
+
     _attr_has_entity_name = True
-    
-    def __init__(self, api: PhnixAPI, config_entry: ConfigEntry, sensor_config: dict):
+
+    def __init__(
+        self,
+        coordinator: PhnixDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        sensor_config: dict,
+    ):
         """Initialize the binary sensor."""
-        self.api = api
+        super().__init__(coordinator)
         self.config_entry = config_entry
         self.sensor_config = sensor_config
-        
-        # 设置实体属性
+        self._address = sensor_config["address"]
+        self._num = sensor_config.get("num")
+
+        # Set entity attributes
         self._attr_unique_id = f"{config_entry.entry_id}_{sensor_config['key']}"
         self._attr_name = sensor_config["name"]
         self._attr_device_class = sensor_config["device_class"]
-        
-        # 状态属性
-        self._attr_is_on = False
-        self._attr_available = False
-    
-    async def async_update(self) -> None:
-        """Update the binary sensor state."""
-        try:
-            # 获取设备状态
-            status_data = await self.api.get_device_status()
-            
-            # 查找对应的数据
-            address = self.sensor_config["address"]
-            num = self.sensor_config.get("num")
-            
-            for item in status_data:
-                if item["address"] == address:
-                    if num:
-                        # 对于有num字段的传感器，需要匹配num
-                        if item.get("num") == num:
-                            value = item.get("dataValue")
-                            self._attr_is_on = value == "1" if value is not None else False
-                            break
-                    else:
-                        # 对于没有num字段的传感器，直接使用dataValue
-                        value = item.get("dataValue")
-                        self._attr_is_on = value == "1" if value is not None else False
-                        break
-            else:
-                self._attr_is_on = False
-            
-            self._attr_available = True
-            
-        except Exception as e:
-            error_msg = str(e)
-            # 如果是登录相关错误，记录为警告而不是错误，因为会自动重试
-            if "请重新登录" in error_msg or "登录" in error_msg:
-                _LOGGER.warning("Binary sensor %s 更新时遇到登录问题，将自动重试: %s", self._attr_name, error_msg)
-            else:
-                _LOGGER.error("Failed to update binary sensor %s: %s", self._attr_name, e)
-            self._attr_available = False 
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the binary sensor is on."""
+        if not self.coordinator.data:
+            return False
+
+        if self._num:
+            # For multi-value addresses (2019, 2034), use (address, num) lookup
+            by_address_num = self.coordinator.data.get("by_address_num", {})
+            item = by_address_num.get((self._address, self._num))
+        else:
+            # For simple addresses, use address-only lookup
+            by_address = self.coordinator.data.get("by_address", {})
+            item = by_address.get(self._address)
+
+        if not item:
+            return False
+
+        value = item.get("dataValue")
+        return value == "1" if value is not None else False 
