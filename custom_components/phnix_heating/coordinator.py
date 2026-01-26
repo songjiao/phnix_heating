@@ -62,6 +62,10 @@ class PhnixDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 self.device_code
             )
 
+            # Debug: log all available addresses for troubleshooting
+            all_addresses = sorted(by_address.keys())
+            _LOGGER.debug("Available addresses: %s", all_addresses)
+
             return {
                 "raw": raw_data,
                 "by_address": by_address,

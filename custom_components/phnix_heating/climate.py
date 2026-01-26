@@ -116,27 +116,28 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
         mode_item = by_address.get("2012")
         mode_status = mode_item.get("dataValue") if mode_item else None
 
-        # Use status addresses (2xxx) for reading, not control addresses (1xxx)
-        # 2158 = cooling target temp status, 2159 = heating target temp status
+        # Try status addresses first (2xxx), fallback to control addresses (1xxx)
         if mode_status == MODE_COOL:
-            address = "2158"
+            addresses = ["2158", "1158"]
         elif mode_status == MODE_HEAT:
-            address = "2159"
+            addresses = ["2159", "1159"]
         else:
             _LOGGER.debug("Unknown mode status: %s, cannot determine target temp address", mode_status)
             return None
 
-        item = by_address.get(address)
-        if not item:
-            _LOGGER.debug("Target temp address %s not found in data", address)
-            return None
+        # Try each address in order
+        for address in addresses:
+            item = by_address.get(address)
+            if item:
+                try:
+                    value = item.get("dataValue")
+                    _LOGGER.debug("Target temp (address %s) raw value: %s", address, value)
+                    return float(value) if value else None
+                except (ValueError, TypeError):
+                    continue
 
-        try:
-            value = item.get("dataValue")
-            _LOGGER.debug("Target temp (address %s) raw value: %s", address, value)
-            return float(value) if value else None
-        except (ValueError, TypeError):
-            return None
+        _LOGGER.debug("Target temp not found in addresses: %s", addresses)
+        return None
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""

@@ -192,37 +192,45 @@ class PhnixAPI:
         """Set device power state."""
         protocol_id = await self._get_protocol_id()
         value = POWER_ON if power else POWER_OFF
-        
+
         data = {
             "deviceCode": self.device_code,
             "protocalId": protocol_id,
             "address": POWER_ADDRESS,
             "value": value
         }
-        
+
+        _LOGGER.debug("Setting power: address=%s, value=%s", POWER_ADDRESS, value)
         result = await self._make_request(CONTROL_URL, data)
-        
+        _LOGGER.debug("Set power response: %s", result)
+
         if not result.get("isReusltSuc"):
             error_msg = result.get("error_msg", "未知错误")
             raise PhnixAPIError(f"设置电源状态失败: {error_msg}")
+
+        _LOGGER.info("Power set to %s successfully", "ON" if power else "OFF")
     
     async def set_mode(self, mode: str) -> None:
         """Set device mode (cool/heat)."""
         protocol_id = await self._get_protocol_id()
         value = MODE_COOL if mode == "cool" else MODE_HEAT
-        
+
         data = {
             "deviceCode": self.device_code,
             "protocalId": protocol_id,
             "address": MODE_ADDRESS,
             "value": value
         }
-        
+
+        _LOGGER.debug("Setting mode: address=%s, value=%s (%s)", MODE_ADDRESS, value, mode)
         result = await self._make_request(CONTROL_URL, data)
-        
+        _LOGGER.debug("Set mode response: %s", result)
+
         if not result.get("isReusltSuc"):
             error_msg = result.get("error_msg", "未知错误")
             raise PhnixAPIError(f"设置工作模式失败: {error_msg}")
+
+        _LOGGER.info("Mode set to %s successfully", mode)
     
     async def set_temperature(self, temperature: float, mode: str) -> None:
         """Set target temperature."""
