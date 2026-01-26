@@ -1,4 +1,5 @@
 """Climate platform for Phnix Heating integration."""
+import asyncio
 import logging
 from typing import Any, Optional
 
@@ -159,6 +160,10 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
                     _LOGGER.debug("Sending heat mode command")
                     await self.api.set_mode("heat")
 
+            # Wait for device to process command before refreshing
+            _LOGGER.debug("Waiting for device to process command...")
+            await asyncio.sleep(2)
+
             # Request coordinator refresh to update all entities
             _LOGGER.debug("Refreshing coordinator after mode change")
             await self.coordinator.async_request_refresh()
@@ -188,6 +193,9 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
                 _LOGGER.warning("Cannot set temperature when mode is OFF")
                 return
 
+            # Wait for device to process command before refreshing
+            await asyncio.sleep(2)
+
             # Request coordinator refresh to update all entities
             await self.coordinator.async_request_refresh()
             _LOGGER.info("Temperature set to %s successfully", temperature)
@@ -204,7 +212,11 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
             _LOGGER.debug("Power on command sent, setting default mode to HEAT")
             # Default to heat mode when turning on (most common for floor heating)
             await self.api.set_mode("heat")
-            _LOGGER.debug("Heat mode command sent, refreshing coordinator")
+            # Wait for device to process command before refreshing
+            _LOGGER.debug("Waiting for device to process command...")
+            await asyncio.sleep(2)
+
+            _LOGGER.debug("Refreshing coordinator")
             await self.coordinator.async_request_refresh()
             _LOGGER.info("Device turned on successfully with HEAT mode")
         except Exception as e:
@@ -216,6 +228,10 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
         try:
             _LOGGER.debug("Turning off device...")
             await self.api.set_power(False)
+
+            # Wait for device to process command before refreshing
+            await asyncio.sleep(2)
+
             await self.coordinator.async_request_refresh()
             _LOGGER.info("Device turned off successfully")
         except Exception as e:
