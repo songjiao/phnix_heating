@@ -1,8 +1,16 @@
 """API client for Phnix Heating system."""
+import asyncio
 import logging
 import hashlib
 import aiohttp
 from typing import Any, Dict, List, Optional
+
+# Timeout configuration
+DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=10)
+
+# Retry configuration for transient network errors
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # seconds
 
 from .const import (
     LOGIN_URL, CONTROL_URL, STATUS_URL, CONFIG_URL,
@@ -32,7 +40,7 @@ class PhnixAPI:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
+            self.session = aiohttp.ClientSession(timeout=DEFAULT_TIMEOUT)
         return self.session
     
     def _hash_password(self, password: str) -> str:
@@ -40,46 +48,65 @@ class PhnixAPI:
         return hashlib.md5(password.encode()).hexdigest()
     
     async def login(self) -> None:
-        """Login and get token."""
-        try:
-            session = await self._get_session()
-            
-            # 准备登录数据
-            login_data = {
-                **LOGIN_DATA,
-                "userName": self.username,
-                "password": self._hash_password(self.password)
-            }
-            
-            _LOGGER.debug("正在登录...")
-            
-            async with session.post(
-                LOGIN_URL,
-                headers=DEFAULT_HEADERS,
-                json=login_data
-            ) as response:
-                if response.status != 200:
-                    raise PhnixAPIError(f"登录失败，HTTP状态码: {response.status}")
-                
-                data = await response.json()
-                
-                if not data.get("isReusltSuc"):
-                    error_msg = data.get("error_msg", "未知错误")
-                    raise PhnixAPIError(f"登录失败: {error_msg}")
-                
-                # 获取token
-                object_result = data.get("objectResult", {})
-                self.token = object_result.get("x-token")
-                
-                if not self.token:
-                    raise PhnixAPIError("登录成功但未获取到token")
-                
-                _LOGGER.debug("登录成功，获取到token")
-                
-        except aiohttp.ClientError as e:
-            raise PhnixAPIError(f"网络连接错误: {e}")
-        except Exception as e:
-            raise PhnixAPIError(f"登录过程中发生错误: {e}")
+        """Login and get token with retry logic."""
+        last_error: Optional[Exception] = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                session = await self._get_session()
+
+                # Prepare login data
+                login_data = {
+                    **LOGIN_DATA,
+                    "userName": self.username,
+                    "password": self._hash_password(self.password)
+                }
+
+                _LOGGER.debug("正在登录... (尝试 %d/%d)", attempt + 1, MAX_RETRIES)
+
+                async with session.post(
+                    LOGIN_URL,
+                    headers=DEFAULT_HEADERS,
+                    json=login_data
+                ) as response:
+                    if response.status != 200:
+                        raise PhnixAPIError(f"登录失败，HTTP状态码: {response.status}")
+
+                    data = await response.json()
+
+                    if not data.get("isReusltSuc"):
+                        error_msg = data.get("error_msg", "未知错误")
+                        raise PhnixAPIError(f"登录失败: {error_msg}")
+
+                    # Get token
+                    object_result = data.get("objectResult", {})
+                    self.token = object_result.get("x-token")
+
+                    if not self.token:
+                        raise PhnixAPIError("登录成功但未获取到token")
+
+                    _LOGGER.debug("登录成功，获取到token")
+                    return
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    _LOGGER.warning(
+                        "登录请求失败 (尝试 %d/%d): %s，%d秒后重试",
+                        attempt + 1, MAX_RETRIES, e, RETRY_DELAY
+                    )
+                    await asyncio.sleep(RETRY_DELAY)
+                else:
+                    _LOGGER.error("登录请求失败，已达到最大重试次数: %s", e)
+
+            except PhnixAPIError:
+                raise
+
+            except Exception as e:
+                raise PhnixAPIError(f"登录过程中发生错误: {e}")
+
+        # All retries exhausted
+        raise PhnixAPIError(f"网络连接错误: {last_error}")
     
     async def _ensure_token(self) -> None:
         """Ensure we have a valid token."""
@@ -87,55 +114,70 @@ class PhnixAPI:
             await self.login()
     
     async def _make_request(
-        self, 
-        url: str, 
-        data: Dict[str, Any], 
-        retry_on_auth_error: bool = True
+        self,
+        url: str,
+        data: Dict[str, Any],
+        retry_on_auth_error: bool = True,
     ) -> Dict[str, Any]:
-        """Make API request with token handling."""
-        try:
-            await self._ensure_token()
-            
-            session = await self._get_session()
-            headers = {**DEFAULT_HEADERS, "x-token": self.token}
-            
-            async with session.post(url, headers=headers, json=data) as response:
-                if response.status == 401 and retry_on_auth_error:
-                    _LOGGER.warning("Token可能已过期，尝试重新登录")
-                    self.token = None
-                    await self.login()
-                    headers = {**DEFAULT_HEADERS, "x-token": self.token}
-                    
-                    async with session.post(url, headers=headers, json=data) as retry_response:
-                        if retry_response.status != 200:
-                            raise PhnixAPIError(f"API请求失败，HTTP状态码: {retry_response.status}")
-                        return await retry_response.json()
-                
-                if response.status != 200:
-                    raise PhnixAPIError(f"API请求失败，HTTP状态码: {response.status}")
-                
-                result = await response.json()
-                
-                # 检查是否需要重新登录（即使状态码是200）
-                if not result.get("isReusltSuc") and retry_on_auth_error:
-                    error_msg = result.get("error_msg", "")
-                    if "请重新登录" in error_msg or "token" in error_msg.lower() or "登录" in error_msg:
-                        _LOGGER.warning("服务器要求重新登录，尝试重新登录")
+        """Make API request with token handling and retry logic."""
+        last_error: Optional[Exception] = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                await self._ensure_token()
+
+                session = await self._get_session()
+                headers = {**DEFAULT_HEADERS, "x-token": self.token}
+
+                async with session.post(url, headers=headers, json=data) as response:
+                    if response.status == 401 and retry_on_auth_error:
+                        _LOGGER.warning("Token可能已过期，尝试重新登录")
                         self.token = None
                         await self.login()
                         headers = {**DEFAULT_HEADERS, "x-token": self.token}
-                        
+
                         async with session.post(url, headers=headers, json=data) as retry_response:
                             if retry_response.status != 200:
                                 raise PhnixAPIError(f"API请求失败，HTTP状态码: {retry_response.status}")
                             return await retry_response.json()
-                
-                return result
-                
-        except aiohttp.ClientError as e:
-            raise PhnixAPIError(f"网络连接错误: {e}")
-        except Exception as e:
-            raise PhnixAPIError(f"API请求过程中发生错误: {e}")
+
+                    if response.status != 200:
+                        raise PhnixAPIError(f"API请求失败，HTTP状态码: {response.status}")
+
+                    result = await response.json()
+
+                    # Check if re-login is required (even with 200 status)
+                    if not result.get("isReusltSuc") and retry_on_auth_error:
+                        error_msg = result.get("error_msg", "")
+                        if "请重新登录" in error_msg or "token" in error_msg.lower() or "登录" in error_msg:
+                            _LOGGER.warning("服务器要求重新登录，尝试重新登录")
+                            self.token = None
+                            await self.login()
+                            headers = {**DEFAULT_HEADERS, "x-token": self.token}
+
+                            async with session.post(url, headers=headers, json=data) as retry_response:
+                                if retry_response.status != 200:
+                                    raise PhnixAPIError(f"API请求失败，HTTP状态码: {retry_response.status}")
+                                return await retry_response.json()
+
+                    return result
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    _LOGGER.warning(
+                        "网络请求失败 (尝试 %d/%d): %s，%d秒后重试",
+                        attempt + 1, MAX_RETRIES, e, RETRY_DELAY
+                    )
+                    await asyncio.sleep(RETRY_DELAY)
+                else:
+                    _LOGGER.error("网络请求失败，已达到最大重试次数: %s", e)
+
+            except Exception as e:
+                raise PhnixAPIError(f"API请求过程中发生错误: {e}")
+
+        # All retries exhausted
+        raise PhnixAPIError(f"网络连接错误: {last_error}")
     
     async def _get_protocol_id(self) -> str:
         """Get protocol ID for the device."""
