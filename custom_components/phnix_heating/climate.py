@@ -117,6 +117,14 @@ class PhnixClimate(CoordinatorEntity[PhnixDataUpdateCoordinator], ClimateEntity)
         mode_item = by_address.get("2012")
         mode_status = mode_item.get("dataValue") if mode_item else None
 
+        # Debug: find all addresses containing "158" or "159"
+        temp_related = [addr for addr in by_address.keys() if "158" in addr or "159" in addr]
+        if temp_related:
+            _LOGGER.debug("Temperature-related addresses found: %s", temp_related)
+            for addr in temp_related:
+                item = by_address.get(addr)
+                _LOGGER.debug("  Address %s: %s", addr, item)
+
         # Try status addresses first (2xxx), fallback to control addresses (1xxx)
         if mode_status == MODE_COOL:
             addresses = ["2158", "1158"]
